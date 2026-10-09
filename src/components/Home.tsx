@@ -13,6 +13,7 @@ import {
   deleteFolder,
   moveBoard,
   saveFolder,
+  setPassword,
   signOut,
   type BoardRow,
   type FolderRow,
@@ -219,6 +220,9 @@ export function Home({ email }: { email: string }) {
     }
   };
 
+  // Lets the owner sign in without waiting on emails (Supabase rate-limits them).
+  const [choosingPassword, setChoosingPassword] = useState(false);
+
   const panelTitle = view === "all" ? "All boards" : view === "unfiled" ? "Unfiled" : (folder?.name ?? "");
 
   if (busy) return <div className="loading">{busy}</div>;
@@ -231,6 +235,9 @@ export function Home({ email }: { email: string }) {
           {note}
         </span>
         <span className="muted small">{email}</span>
+        <button className="btn" onClick={() => setChoosingPassword(true)}>
+          Set password
+        </button>
         <button className="btn" onClick={() => void signOut()}>
           Sign out
         </button>
@@ -476,6 +483,75 @@ export function Home({ email }: { email: string }) {
           </ul>
         )}
       </aside>
+      {choosingPassword && (
+        <PasswordDialog
+          onClose={() => setChoosingPassword(false)}
+          onSaved={() => {
+            setChoosingPassword(false);
+            flash("Password saved. Next time, sign in with your email and this password.");
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PasswordDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [pw, setPw] = useState("");
+  const [again, setAgain] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <form
+        className="modal modal-small"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pw-title"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (pw.length < 8) return setError("Use at least 8 characters.");
+          if (pw !== again) return setError("The two passwords don't match.");
+          setSaving(true);
+          try {
+            await setPassword(pw);
+            onSaved();
+          } catch (err) {
+            setError((err as Error).message);
+            setSaving(false);
+          }
+        }}
+      >
+        <h2 id="pw-title">Set a password</h2>
+        <p className="muted">Sign in with your email and this password, without waiting for an email.</p>
+        <input
+          className="text-input"
+          type="password"
+          autoComplete="new-password"
+          autoFocus
+          placeholder="New password (8+ characters)"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+        />
+        <input
+          className="text-input"
+          type="password"
+          autoComplete="new-password"
+          placeholder="Same password again"
+          value={again}
+          onChange={(e) => setAgain(e.target.value)}
+        />
+        {error && <p className="form-error">{error}</p>}
+        <div className="modal-actions" style={{ gap: 8 }}>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Saving..." : "Save password"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

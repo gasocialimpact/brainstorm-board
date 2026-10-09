@@ -46,6 +46,17 @@ export const onAuthChange = (cb: (s: Session | null) => void) => {
   return () => data.subscription.unsubscribe();
 };
 
+export async function signInWithPassword(email: string, password: string) {
+  const { error } = await db().auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+}
+
+/** Set or change the signed-in owner's password. */
+export async function setPassword(password: string) {
+  const { error } = await db().auth.updateUser({ password });
+  if (error) throw new Error(error.message);
+}
+
 export const signOut = () => db().auth.signOut();
 
 export const isAdmin = () => rpc<boolean>("bb_is_admin");
