@@ -1,137 +1,98 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { newFrame } from "./board/frame";
-import { newId } from "./board/ids";
-import type { BoardExport } from "./board/io";
-import { loadBoard, loadFiles, saveBoard, saveFile } from "./board/storage";
+import { loadBoard, loadFiles, saveBoard } from "./board/storage";
 import type { Board, BoardFiles } from "./board/types";
 import { BoardEditor } from "./components/BoardEditor";
-import { Landing } from "./components/Landing";
+import { FolderPage } from "./components/FolderPage";
+import { Home } from "./components/Home";
+import { SignIn } from "./components/SignIn";
+import { takePendingPdf } from "./owner/pending";
+import { useOwner, type OwnerState } from "./owner/useOwner";
+import { go, parseRoute, type Route } from "./route";
 import { supabase } from "./sync/client";
-import { isShareId, newShareId } from "./sync/ids";
-import { fetchBoard, uploadBoard } from "./sync/remote";
-import { framesForBoard } from "./templates/boardTemplates";
-
-type Open = { board: Board; files: BoardFiles; pdf?: File };
-
-// A shared board's address is the app URL plus #b=<share id>.
-const boardIdFromHash = () => {
-  const m = window.location.hash.match(/^#b=([A-Za-z0-9_-]+)$/);
-  return m && isShareId(m[1]) ? m[1] : null;
-};
-const setHash = (id: string | null) =>
-  history.replaceState(null, "", id ? `#b=${id}` : window.location.pathname + window.location.search);
+import { fetchBoard } from "./sync/remote";
 
 export function App() {
-  const [open, setOpen] = useState<Open | null>(null);
-  const [loading, setLoading] = useState<string | null>(null);
-  const openId = useRef<string | null>(null);
-  openId.current = open?.board.id ?? null;
+  const [route, setRoute] = useState<Route>(parseRoute);
+  const owner = useOwner();
 
-  /** Open a shared board: latest from the server, or this device's copy if offline. */
-  const openShared = useCallback(async (id: string) => {
-    if (openId.current === id) return;
-    openId.current = id;
-    setLoading("Opening board...");
-    try {
+  useEffect(() => {
+    const on = () => setRoute(parseRoute());
+    window.addEventListener("hashchange", on);
+    window.addEventListener("popstate", on);
+    return () => {
+      window.removeEventListener("hashchange", on);
+      window.removeEventListener("popstate", on);
+    };
+  }, []);
+
+  if (!supabase) {
+    return <div className="loading">Brainstorm Board isn't connected to its database.</div>;
+  }
+
+  if (route.kind === "board") {
+    return <BoardRoute key={route.id} id={route.id} folder={route.folder} owner={owner} />;
+  }
+  if (route.kind === "folder") {
+    return <FolderPage key={route.id} id={route.id} />;
+  }
+  if (owner.status === "loading") return <div className="loading">Loading...</div>;
+  if (owner.status !== "owner") return <SignIn owner={owner} />;
+  return <Home email={owner.email} />;
+}
+
+type Loaded = { board: Board; files: BoardFiles; pdf?: File };
+
+/** Opens a board from its link: latest from the server, or this device's copy if offline. */
+function BoardRoute({ id, folder, owner }: { id: string; folder?: string; owner: OwnerState }) {
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
       let board: Board | null | undefined = null;
+      let offline = false;
       try {
         board = await fetchBoard(id);
       } catch (err) {
         console.error(err);
         board = await loadBoard(id);
-        if (board) alert("Couldn't reach the server, so this is the copy saved on this device.");
+        offline = true;
       }
+      if (!live) return;
       if (!board) {
-        openId.current = null;
-        alert("That board wasn't found. The link may be incomplete.");
-        setHash(null);
+        setProblem("This board wasn't found. The link may be incomplete, or the board was deleted.");
         return;
       }
+      if (offline) alert("Couldn't reach the server, so this is the copy saved on this device.");
       await saveBoard(board);
-      setHash(id);
-      setOpen({ board, files: await loadFiles(id) });
-    } finally {
-      setLoading(null);
-    }
-  }, []);
-
-  // Follow #b=<id> links, including when the hash changes in an open tab.
-  useEffect(() => {
-    const go = () => {
-      const id = boardIdFromHash();
-      if (id) void openShared(id);
+      const files = await loadFiles(id);
+      if (live) setLoaded({ board, files, pdf: takePendingPdf(id) });
+    })();
+    return () => {
+      live = false;
     };
-    go();
-    window.addEventListener("hashchange", go);
-    return () => window.removeEventListener("hashchange", go);
-  }, [openShared]);
+  }, [id]);
 
-  const create = async (title: string, templateId: string, pdf?: File) => {
-    const board: Board = {
-      id: supabase ? newShareId() : newId("b"),
-      title: title || "Untitled Brainstorm",
-      updated: Date.now(),
-      frames: framesForBoard(templateId),
-    };
-    // New boards are shared from the start when sharing is set up; if the
-    // server can't be reached the board stays on this device for now.
-    if (supabase) {
-      setLoading("Creating board...");
-      try {
-        await uploadBoard(board, {});
-        board.shared = true;
-      } catch (err) {
-        console.error(err);
-        board.id = newId("b");
-      } finally {
-        setLoading(null);
-      }
-    }
-    await saveBoard(board);
-    if (board.shared) setHash(board.id);
-    setOpen({ board, files: {}, pdf });
-  };
+  if (problem) return <div className="loading">{problem}</div>;
+  if (!loaded) return <div className="loading">Opening board...</div>;
 
-  const openSaved = async (id: string) => {
-    const board = await loadBoard(id);
-    if (!board) return;
-    if (board.shared) return openShared(id);
-    setOpen({ board, files: await loadFiles(id) });
-  };
-
-  const importBoard = async (data: BoardExport) => {
-    const board: Board = { ...data.board, id: newId("b"), shared: false, updated: Date.now() };
-    if (!board.frames.length) board.frames = [newFrame("Frame 1")];
-    await saveBoard(board);
-    await Promise.all(Object.values(data.files).map((f) => saveFile(board.id, f)));
-    setOpen({ board, files: data.files });
-  };
-
-  if (loading) return <div className="loading">{loading}</div>;
-
-  if (!open) {
-    return (
-      <Landing
-        onNew={(t, id) => void create(t, id)}
-        onNewFromPdf={(t, pdf) => void create(t, "blank", pdf)}
-        onOpen={openSaved}
-        onImport={importBoard}
-      />
-    );
-  }
+  // Who gets a way back: folder visitors return to the folder, the owner to
+  // the landing page, everyone else stays on the board.
+  const back = folder
+    ? { label: "← Folder", go: () => go({ kind: "folder", id: folder }) }
+    : owner.status === "owner"
+      ? { label: "← Boards", go: () => go({ kind: "home" }) }
+      : undefined;
 
   return (
     <BoardEditor
-      key={open.board.id}
-      initialBoard={open.board}
-      initialFiles={open.files}
-      initialPdf={open.pdf}
-      onExit={() => {
-        setHash(null);
-        setOpen(null);
-      }}
-      onShared={(id) => setHash(id)}
+      initialBoard={loaded.board}
+      initialFiles={loaded.files}
+      initialPdf={loaded.pdf}
+      backLabel={back?.label}
+      onExit={back?.go}
     />
   );
 }

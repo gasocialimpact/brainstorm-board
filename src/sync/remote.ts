@@ -38,8 +38,13 @@ export const frameMeta = (f: Frame, is_deleted = false): FrameMeta => ({
   is_deleted,
 });
 
-export const createBoard = (id: string, title: string) =>
-  rpc("bb_create_board", { p_id: id, p_title: title });
+/** Owner only (see supabase/002_owner_and_folders.sql). */
+export const createBoard = (id: string, title: string, folderId: string | null = null) =>
+  rpc("bb_create_board", { p_id: id, p_title: title, p_folder: folderId });
+
+/** The cover image shown on the landing and folder pages */
+export const setThumbnail = (id: string, dataUrl: string) =>
+  rpc("bb_set_thumbnail", { p_board: id, p_data: dataUrl });
 
 export const setTitle = (id: string, title: string) =>
   rpc("bb_set_title", { p_id: id, p_title: title });
@@ -93,9 +98,9 @@ export async function fetchBoard(id: string): Promise<Board | null> {
 }
 
 /** Upload a whole board (used when sharing a board that was only local). */
-export async function uploadBoard(board: Board, files: BoardFiles) {
+export async function uploadBoard(board: Board, files: BoardFiles, folderId: string | null = null) {
   board.frames.forEach((f, i) => (f.position ??= i));
-  await createBoard(board.id, board.title);
+  await createBoard(board.id, board.title, folderId);
   await upsertFrames(board.id, board.frames.map((f) => frameMeta(f)));
   await upsertElements(
     board.id,

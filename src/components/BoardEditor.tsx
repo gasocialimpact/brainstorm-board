@@ -35,6 +35,7 @@ import {
   downloadFile,
   fetchBoard,
   frameMeta,
+  setThumbnail,
   setTitle as saveRemoteTitle,
   upsertElements,
   upsertFrames,
@@ -43,6 +44,7 @@ import {
   type ElementRow,
   type FrameMeta,
 } from "../sync/remote";
+import { linkTo } from "../route";
 import { frameFromTemplate } from "../templates/boardTemplates";
 
 import { CLUSTER_MIME, ClusterPanel } from "./ClusterPanel";
@@ -55,9 +57,11 @@ type Props = {
   initialFiles: BoardFiles;
   /** PDF to import as soon as the editor is ready (from "Start from a PDF") */
   initialPdf?: File;
-  onExit: () => void;
+  /** Where the back button goes; no back button when omitted */
+  onExit?: () => void;
+  backLabel?: string;
   /** Called when a device-only board becomes shared (it gets a new id) */
-  onShared: (id: string) => void;
+  onShared?: (id: string) => void;
 };
 
 // Fixed margins (clear of the toolbar and zoom controls) so the frame sits in
@@ -76,10 +80,8 @@ const between = (prev?: number, next?: number) =>
         ? prev + 1
         : (prev + next) / 2;
 
-export const shareLink = (id: string) =>
-  `${window.location.origin}${window.location.pathname}#b=${id}`;
 
-export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, onShared }: Props) {
+export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, backLabel, onShared }: Props) {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   // The board is kept in a ref (the editor reads and writes it outside React's
   // render cycle) and `rev` re-renders the chrome when it changes.
@@ -169,8 +171,21 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, on
     } catch {
       flash("Could not save on this device. Use Export to keep a copy.");
     }
+    syncCover();
     bump();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [captureCurrent]);
+
+  // The first frame's thumbnail is the board's cover on the landing and
+  // folder pages.
+  const coverSent = useRef<string | undefined>(undefined);
+  const syncCover = () => {
+    const b = boardRef.current;
+    const cover = b.frames[0]?.thumbnail;
+    if (!b.shared || !cover || cover === coverSent.current) return;
+    coverSent.current = cover;
+    setThumbnail(b.id, cover).catch(console.error);
+  };
 
   const schedulePersist = useCallback(() => {
     window.clearTimeout(saveTimer.current);
@@ -560,7 +575,10 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, on
         if (cancelled) return;
         if (!f.thumbnail) f.thumbnail = await renderThumbnail(f.elements, filesRef.current);
       }
-      if (!cancelled) bump();
+      if (!cancelled) {
+        syncCover();
+        bump();
+      }
     })();
     return () => {
       cancelled = true;
@@ -787,7 +805,7 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, on
 
   const [sharing, setSharing] = useState(false);
   const copyLink = async () => {
-    const link = shareLink(boardRef.current.id);
+    const link = linkTo({ kind: "board", id: boardRef.current.id });
     try {
       await navigator.clipboard.writeText(link);
       flash("Link copied. Anyone with the link can view and edit this board.", 5000);
@@ -815,7 +833,7 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, on
       await deleteBoard(oldId);
       rememberAll();
       setShared(true);
-      onShared(id);
+      onShared?.(id);
       await copyLink();
     } catch (err) {
       console.error(err);
@@ -857,9 +875,11 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, on
   return (
     <div className="app">
       <header className="topbar">
-        <button className="link-btn" onClick={onExit} title="All boards">
-          ← Boards
-        </button>
+        {onExit && (
+          <button className="link-btn" onClick={onExit}>
+            {backLabel ?? "← Back"}
+          </button>
+        )}
         <input
           className="board-title"
           value={title}

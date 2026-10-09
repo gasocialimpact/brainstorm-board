@@ -32,33 +32,39 @@ Live app: https://gasocialimpact.github.io/brainstorm-board/
 - Boards are saved in the browser's IndexedDB on this device. Export saves a
   `.brainstorm.json` file (images included) that Open a file loads back.
 
-## Live sharing
+## Access, folders and live sharing
 
-Boards can be shared online with live editing, using Supabase.
-
-- New boards are shared from the start. A board made before sharing was set
-  up (or while offline) gets a Share button that uploads it.
-- The link is the app URL plus `#b=<share id>`. The share id is 128 random
-  bits; anyone with the link can view and edit. There are no accounts.
+- The landing page is for the owner only. The owner signs in with an emailed
+  link (Supabase Auth); only addresses in the `bb_admins` table get in. There
+  the owner creates boards (from templates, a PDF or an exported file),
+  organizes them into folders, moves and deletes them, and copies links.
+- Board links (`#b=<id>`): anyone with the link can view and edit that board,
+  and nothing else. Folder links (`#f=<id>`): anyone with the link sees that
+  folder's boards and can open them. Board and folder ids are 128 random bits.
 - Every Excalidraw element is stored as its own row with its `version`, and
   the database keeps whichever copy is newer, so simultaneous edits merge
   instead of overwriting each other. Live changes travel over a Supabase
   Realtime broadcast channel per board; presence shows who is here, which
   frame they're on, and their cursor.
 - PDF pages and images go to the public `board-files` storage bucket under
-  the board's share id. The bucket can't be listed.
+  the board's id. The bucket can't be listed except by the owner.
 - Tables are closed to the public key. Everything goes through the `bb_*`
-  database functions, each of which needs a board id.
+  database functions; owner-only ones check `bb_admins`.
 
-Setup: run `supabase/schema.sql` once in the Supabase SQL editor, then put the
-project URL and anon key in `.env.local`:
+Setup:
+
+1. Run `supabase/schema.sql`, then `supabase/002_owner_and_folders.sql`, in the
+   Supabase SQL editor, and add the owner:
+   `insert into public.bb_admins (email) values ('owner@example.org');`
+2. In Authentication > URL Configuration, set the Site URL to the published
+   app and add it (and `http://localhost:5173/**` for development) to the
+   redirect URLs.
+3. Put the project URL and anon key in `.env.local`:
 
 ```
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
-
-Without these the app still works, with boards saved on the device only.
 
 ## Develop
 

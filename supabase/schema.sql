@@ -5,8 +5,8 @@
 -- reached only through the functions below, each of which requires a board
 -- id, so boards can't be listed or guessed.
 --
--- Run once in the Supabase dashboard: SQL Editor > New query > paste > Run.
--- Safe to re-run.
+-- Run once in the Supabase dashboard: SQL Editor > New query > paste > Run,
+-- then run 002_owner_and_folders.sql. Both are safe to re-run.
 
 -- ---------- Tables ----------
 
@@ -53,16 +53,7 @@ revoke all on public.boards, public.frames, public.elements from anon, authentic
 
 -- ---------- Functions (the only way in) ----------
 
-create or replace function public.bb_create_board(p_id text, p_title text)
-returns void
-language sql
-security definer
-set search_path = ''
-as $$
-  insert into public.boards (id, title)
-  values (p_id, coalesce(nullif(p_title, ''), 'Untitled Brainstorm'))
-  on conflict (id) do nothing;
-$$;
+-- bb_create_board (owner only) is defined in 002_owner_and_folders.sql.
 
 create or replace function public.bb_get_board(p_id text)
 returns jsonb
@@ -153,12 +144,10 @@ as $$
   update public.boards set updated_at = now() where id = p_board;
 $$;
 
-revoke all on function public.bb_create_board(text, text) from public;
 revoke all on function public.bb_get_board(text) from public;
 revoke all on function public.bb_set_title(text, text) from public;
 revoke all on function public.bb_upsert_frames(text, jsonb) from public;
 revoke all on function public.bb_upsert_elements(text, jsonb) from public;
-grant execute on function public.bb_create_board(text, text) to anon, authenticated;
 grant execute on function public.bb_get_board(text) to anon, authenticated;
 grant execute on function public.bb_set_title(text, text) to anon, authenticated;
 grant execute on function public.bb_upsert_frames(text, jsonb) to anon, authenticated;
