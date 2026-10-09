@@ -6,9 +6,14 @@ import "@excalidraw/excalidraw/index.css";
 import "./styles.css";
 
 import { App } from "./App";
+import { fontsReady, registerGsicFonts } from "./fonts";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+registerGsicFonts();
+
+void fontsReady().then(() => {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+});

@@ -4,12 +4,15 @@ import {
   Excalidraw,
   FONT_FAMILY,
   MainMenu,
+  getCommonBounds,
   getSceneVersion,
   newElementWith,
   reconcileElements,
+  useHandleLibrary,
   viewportCoordsToSceneCoords,
 } from "@excalidraw/excalidraw";
 import type {
+  AppState,
   BinaryFiles,
   Collaborator,
   ExcalidrawImperativeAPI,
@@ -22,6 +25,7 @@ import { CLUSTERS, CLUSTER_W, buildCluster, nextClusterX, type ClusterKind } fro
 import { build, frameSize, isFrameFurniture, newPageFrame, pageRight, roleOf } from "../board/frame";
 import { newId } from "../board/ids";
 import { loadImage } from "../board/image";
+import { libraryAdapter } from "../board/library";
 import { downloadBoard } from "../board/io";
 import { renderPdf } from "../board/pdf";
 import { deleteBoard, saveBoard, saveFile } from "../board/storage";
@@ -45,11 +49,13 @@ import {
   type FrameMeta,
 } from "../sync/remote";
 import { linkTo } from "../route";
+import { BODY_FONT, HEADING_FONT } from "../fonts";
 import { frameFromTemplate } from "../templates/boardTemplates";
 
-import { CLUSTER_MIME, ClusterPanel } from "./ClusterPanel";
+import { Brand } from "./Brand";
 import { FrameRail } from "./FrameRail";
 import { NameDialog, getSavedName } from "./NameDialog";
+import { CLUSTER_MIME, SidePanel, type AlignKind } from "./SidePanel";
 import { FrameTemplateDialog } from "./TemplatePicker";
 
 type Props = {
@@ -352,7 +358,8 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
 
   // ---------- Canvas changes ----------
 
-  const onChange = (elements: readonly ExcalidrawElement[], _: unknown, files: BinaryFiles) => {
+  const onChange = (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
+    trackInspector(appState);
     storeNewFiles(files);
     const version = getSceneVersion(elements);
     if (version === lastVersion.current) return;
@@ -365,6 +372,90 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
       if (frame && (!paperId || scene.some((e) => e.id === paperId))) publishElements(frame.id, scene);
     }
   };
+
+  // ---------- Inspector (right sidebar) ----------
+
+  // Excalidraw shows its style panel while something is selected or a drawing
+  // tool is active; the sidebar switches to the inspector at the same time.
+  const [inspecting, setInspecting] = useState(false);
+  const [hasSelection, setHasSelection] = useState(false);
+  const lastSize = useRef("");
+  const trackInspector = (st: AppState) => {
+    const selected = Object.values(st.selectedElementIds).some(Boolean);
+    const drawing = !["selection", "hand", "eraser", "laser", "lasso"].includes(st.activeTool.type);
+    const next = selected || drawing || !!st.editingTextElement;
+    if (next !== inspecting) setInspecting(next);
+    if (selected !== hasSelection) setHasSelection(selected);
+    // The canvas changes size when the Library panel docks; refit the frame.
+    const size = `${st.width}x${st.height}`;
+    if (lastSize.current && size !== lastSize.current) requestAnimationFrame(() => fitFrame());
+    lastSize.current = size;
+  };
+
+  /** Move the selection (as one block) to an edge or the center of the frame. */
+  const alignToFrame = (kind: AlignKind) => {
+    if (!api) return;
+    const st = api.getAppState();
+    const scene = api.getSceneElementsIncludingDeleted();
+    const ids = new Set(Object.keys(st.selectedElementIds).filter((id) => st.selectedElementIds[id]));
+    if (!ids.size) return;
+    // Labels inside shapes and notes inside clusters move with them.
+    for (const e of scene) {
+      if (e.isDeleted) continue;
+      if ((e.type === "text" && e.containerId && ids.has(e.containerId)) || (e.frameId && ids.has(e.frameId))) ids.add(e.id);
+    }
+    const moving = scene.filter((e) => ids.has(e.id) && !e.isDeleted);
+    if (!moving.length) return;
+    const [x1, y1, x2, y2] = getCommonBounds(moving);
+    const { width: fw, height: fh } = frameSize(currentFrame());
+    const PAD = 24;
+    const dx =
+      kind === "left" ? PAD - x1 : kind === "hcenter" ? fw / 2 - (x1 + x2) / 2 : kind === "right" ? fw - PAD - x2 : 0;
+    const dy =
+      kind === "top" ? PAD - y1 : kind === "vcenter" ? fh / 2 - (y1 + y2) / 2 : kind === "bottom" ? fh - PAD - y2 : 0;
+    if (!dx && !dy) return;
+    api.updateScene({
+      elements: scene.map((e) => (ids.has(e.id) && !e.isDeleted ? newElementWith(e, { x: e.x + dx, y: e.y + dy }) : e)),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  };
+
+  // ---------- Pasting between frames ----------
+
+  // Things copied on one frame and pasted on another land in the same spot
+  // they had, so content lines up across frames. Pasting on the same frame
+  // keeps Excalidraw's usual behavior (at the cursor).
+  // Positions of what's being pasted, as they were where it was copied.
+  // (Excalidraw moves pasted elements to the cursor before onDuplicate runs,
+  // so the originals it reports there are already moved.)
+  const pasting = useRef<Map<string, { x: number; y: number }> | null>(null);
+  const onPaste = (data: { elements?: readonly ExcalidrawElement[] }) => {
+    if (data.elements?.length) {
+      pasting.current = new Map(data.elements.map((e) => [e.id, { x: e.x, y: e.y }]));
+      window.setTimeout(() => (pasting.current = null), 1000);
+    }
+    return true;
+  };
+  const onDuplicate = (
+    next: readonly ExcalidrawElement[],
+    prev: readonly ExcalidrawElement[],
+    data: { duplicateIdToOrigId: ReadonlyMap<string, string> },
+  ) => {
+    const positions = pasting.current;
+    if (!positions) return;
+    pasting.current = null;
+    // Copied from this same frame (the originals are here): paste at the cursor.
+    const here = new Set(prev.map((e) => e.id));
+    if ([...positions.keys()].some((id) => here.has(id))) return;
+    return next.map((e) => {
+      const pos = positions.get(data.duplicateIdToOrigId.get(e.id) ?? "");
+      return pos ? ({ ...e, x: pos.x, y: pos.y } as ExcalidrawElement) : e;
+    });
+  };
+
+  // ---------- Library ----------
+
+  useHandleLibrary({ excalidrawAPI: api, adapter: libraryAdapter });
 
   /** Add elements to the current frame as one undoable step */
   const addToFrame = (els: ExcalidrawElement[], select: ExcalidrawElement[] = els) => {
@@ -865,7 +956,9 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
     appState: {
       viewBackgroundColor: "#eef0ee",
       currentItemRoughness: 0,
-      currentItemFontFamily: FONT_FAMILY.Nunito,
+      currentItemFontFamily: BODY_FONT as never,
+      // GSIC fonts first in the font picker's quick choices.
+      fontTopPicks: [BODY_FONT, HEADING_FONT, FONT_FAMILY.Excalifont] as never,
       currentItemStrokeColor: "#1e1e1e",
     },
   }));
@@ -875,6 +968,7 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
   return (
     <div className="app">
       <header className="topbar">
+        <Brand compact />
         {onExit && (
           <button className="link-btn" onClick={onExit}>
             {backLabel ?? "← Back"}
@@ -927,6 +1021,13 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
           </div>
         )}
         <div className="topbar-actions">
+          <button
+            className="btn"
+            onClick={() => api?.toggleSidebar({ name: "default", tab: "library" })}
+            title="Shapes, slides and calendars from the library"
+          >
+            Library
+          </button>
           <button className="btn" onClick={() => imageInput.current?.click()}>
             Add image
           </button>
@@ -990,10 +1091,17 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
             onExcalidrawAPI={setApi}
             initialData={initialData}
             onChange={onChange}
+            onPaste={onPaste as never}
+            onDuplicate={onDuplicate as never}
             onPointerUpdate={onPointerUpdate}
             isCollaborating={shared}
             name={title}
             UIOptions={{
+              // The canvas sits between the frame rail and the side panel, so
+              // Excalidraw would think it's on a tablet and switch to compact
+              // pop-up style menus. Keep the full desktop layout unless the
+              // window really is phone-sized.
+              getFormFactor: (w) => (w < 600 ? "phone" : "desktop"),
               canvasActions: {
                 changeViewBackgroundColor: false,
                 clearCanvas: false,
@@ -1011,7 +1119,12 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
             </MainMenu>
           </Excalidraw>
         </div>
-        <ClusterPanel onAdd={(k) => addCluster(k)} />
+        <SidePanel
+          inspecting={inspecting}
+          canAlign={hasSelection}
+          onAlign={alignToFrame}
+          onAddCluster={(k) => addCluster(k)}
+        />
       </div>
       {pickingFrame && (
         <FrameTemplateDialog onPick={addFrame} onClose={() => setPickingFrame(false)} />

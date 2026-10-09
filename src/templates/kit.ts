@@ -1,7 +1,8 @@
-import { FONT_FAMILY, ROUNDNESS } from "@excalidraw/excalidraw";
+import { ROUNDNESS } from "@excalidraw/excalidraw";
 import type { ExcalidrawElementSkeleton } from "@excalidraw/excalidraw/element/transform";
 
 import { newId } from "../board/ids";
+import { BODY_FONT } from "../fonts";
 
 // Small helpers for laying out templates on a 1600 x 900 frame.
 
@@ -27,7 +28,8 @@ export const C = {
   grayTint: "#f4f4f2",
 };
 
-const FONT = FONT_FAMILY.Nunito;
+// GSIC's Familjen Grotesk (registered in src/fonts.ts)
+const FONT = BODY_FONT as never;
 const ROUND = { type: ROUNDNESS.ADAPTIVE_RADIUS };
 
 type S = ExcalidrawElementSkeleton;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { go } from "../route";
+import { Brand } from "./Brand";
 import { getFolder, type SharedFolder } from "../sync/owner";
 
 const edited = (iso: string) =>
@@ -30,8 +31,11 @@ export function FolderPage({ id }: { id: string }) {
 
   return (
     <div className="folder-page">
+      <div className="folder-brand">
+        <Brand />
+      </div>
       <header>
-        <p className="eyebrow">Brainstorm Board · Shared folder</p>
+        <p className="eyebrow">Shared folder</p>
         <h1>{folder.name}</h1>
         <p className="muted">
           {folder.boards.length} board{folder.boards.length === 1 ? "" : "s"}. Anyone with this

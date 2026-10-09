@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.0-143b5b6",
+    "@fontsource/familjen-grotesk": "5.3.0",
+    "@fontsource/young-serif": "5.3.0",
     "@supabase/supabase-js": "2.116.0",
     "idb-keyval": "6.2.2",
     "pdfjs-dist": "4.10.38",

@@ -11,6 +11,7 @@ import { useOwner, type OwnerState } from "./owner/useOwner";
 import { go, parseRoute, type Route } from "./route";
 import { supabase } from "./sync/client";
 import { fetchBoard } from "./sync/remote";
+import { framesForBoard } from "./templates/boardTemplates";
 
 export function App() {
   const [route, setRoute] = useState<Route>(parseRoute);
@@ -28,6 +29,17 @@ export function App() {
 
   if (!supabase) {
     return <div className="loading">Brainstorm Board isn't connected to its database.</div>;
+  }
+
+  // Development only: a scratch board that never touches the database
+  // (http://localhost:5173/#dev). Not included in the published build.
+  if (import.meta.env.DEV && window.location.hash === "#dev") {
+    return (
+      <BoardEditor
+        initialBoard={{ id: "dev-scratch", title: "Dev scratch board", updated: Date.now(), frames: framesForBoard("strategy") }}
+        initialFiles={{}}
+      />
+    );
   }
 
   if (route.kind === "board") {

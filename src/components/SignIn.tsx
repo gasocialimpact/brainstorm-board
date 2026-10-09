@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { OwnerState } from "../owner/useOwner";
+import { Brand } from "./Brand";
 import { sendSignInLink, signInWithPassword, signOut } from "../sync/owner";
 
 // The landing page is only for the board owner. Everyone else arrives through
@@ -115,7 +116,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="signin">
       <div className="signin-card">
-        <h1>Brainstorm Board</h1>
+        <Brand />
         {children}
       </div>
     </div>

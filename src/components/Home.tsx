@@ -21,6 +21,7 @@ import {
 import { uploadBoard } from "../sync/remote";
 import { framesForBoard } from "../templates/boardTemplates";
 
+import { Brand } from "./Brand";
 import { BoardTemplateGrid } from "./TemplatePicker";
 
 /** Which boards the right-hand panel shows */
@@ -230,7 +231,7 @@ export function Home({ email }: { email: string }) {
   return (
     <div className="home">
       <header className="home-header">
-        <h1>Brainstorm Board</h1>
+        <Brand />
         <span className="status" role="status">
           {note}
         </span>
