@@ -4,7 +4,7 @@ Jamboard-style brainstorming boards with live sharing. Each board is a set of
 fixed frames, with [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT)
 as the drawing engine inside each frame.
 
-Live app: https://gasocialimpact.github.io/brainstorm-board/
+Live app: https://collab-boards.gasocialimpact.com/
 
 ## How it works
 
