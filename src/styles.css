@@ -51,7 +51,7 @@ button, input { font: inherit; color: inherit; }
 .home {
   min-height: 100%;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 380px;
+  grid-template-columns: 220px minmax(0, 1fr) 480px;
   grid-template-rows: auto 1fr;
   grid-template-areas: "head head head" "folders main recent";
   gap: 0 28px;
@@ -173,13 +173,14 @@ button, input { font: inherit; color: inherit; }
   display: block;
 }
 .board-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.board-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Full board names: long ones wrap rather than being cut off. */
+.board-name { font-weight: 600; overflow-wrap: anywhere; line-height: 1.3; }
 .board-actions { display: flex; align-items: center; gap: 2px; padding-right: 6px; }
 .icon-btn { background: none; border: none; cursor: pointer; font-size: 15px; padding: 6px; border-radius: 4px; line-height: 1; }
 .icon-btn:hover { background: #f4f4f2; }
-.move-select { max-width: 92px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; padding: 3px; background: #fff; }
+.move-select { max-width: 140px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; padding: 3px; background: #fff; }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .home { grid-template-columns: 200px minmax(0, 1fr); grid-template-areas: "head head" "folders main" "folders recent"; }
   .recent { position: static; max-height: none; margin-top: 24px; }
 }
