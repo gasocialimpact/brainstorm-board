@@ -16,6 +16,7 @@
     "@fontsource/young-serif": "5.3.0",
     "@supabase/supabase-js": "2.116.0",
     "idb-keyval": "6.2.2",
+    "jspdf": "4.2.1",
     "pdfjs-dist": "4.10.38",
     "react": "19.1.1",
     "react-dom": "19.1.1"

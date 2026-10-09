@@ -80,6 +80,19 @@ export async function deleteBoardEverywhere(id: string) {
   if (data?.length) await store.remove(data.map((f) => `${id}/${f.name}`));
 }
 
+/** Copy a board's images to another board (used when duplicating). */
+export async function copyBoardFiles(fromId: string, toId: string, fileIds: string[]) {
+  const store = db().storage.from(BUCKET);
+  const failed: string[] = [];
+  await Promise.all(
+    fileIds.map(async (f) => {
+      const { error } = await store.copy(`${fromId}/${f}`, `${toId}/${f}`);
+      if (error && !/exists|duplicate/i.test(error.message)) failed.push(f);
+    }),
+  );
+  return failed;
+}
+
 // ---------- Folder links ----------
 
 export type SharedFolder = {

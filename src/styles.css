@@ -509,3 +509,34 @@ body.dock-styles .excalidraw .App-menu__left {
 /* Installing libraries from libraries.excalidraw.com returns to the app's
    home page, which is owner-only, so the browse link isn't offered. */
 .excalidraw .library-menu-browse-button { display: none !important; }
+
+/* ---------- Dropdown menu (Export) ---------- */
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #0000001f;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.menu button:hover, .menu button:focus-visible { background: #e3f3e8; outline: none; }
+.menu button span { font-size: 12px; color: var(--muted); }

@@ -27,6 +27,7 @@ import { newId } from "../board/ids";
 import { loadImage } from "../board/image";
 import { libraryAdapter } from "../board/library";
 import { downloadBoard } from "../board/io";
+import { exportBoardPdf } from "../board/pdfExport";
 import { renderPdf } from "../board/pdf";
 import { deleteBoard, saveBoard, saveFile } from "../board/storage";
 import { renderThumbnail } from "../board/thumbnail";
@@ -66,6 +67,8 @@ type Props = {
   /** Where the back button goes; no back button when omitted */
   onExit?: () => void;
   backLabel?: string;
+  /** Only the owner can copy or share the board's link */
+  canShare?: boolean;
   /** Called when a device-only board becomes shared (it gets a new id) */
   onShared?: (id: string) => void;
 };
@@ -87,7 +90,15 @@ const between = (prev?: number, next?: number) =>
         : (prev + next) / 2;
 
 
-export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, backLabel, onShared }: Props) {
+export function BoardEditor({
+  initialBoard,
+  initialFiles,
+  initialPdf,
+  onExit,
+  backLabel,
+  canShare = false,
+  onShared,
+}: Props) {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   // The board is kept in a ref (the editor reads and writes it outside React's
   // render cycle) and `rev` re-renders the chrome when it changes.
@@ -1037,16 +1048,25 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
           <button className="btn" onClick={clearFrame}>
             Clear frame
           </button>
-          <button
-            className="btn"
-            onClick={() => {
+          <ExportMenu
+            onPdf={async () => {
+              captureCurrent();
+              try {
+                await exportBoardPdf(boardRef.current, filesRef.current, (i, n) =>
+                  setStatus(`Making PDF: page ${i} of ${n}...`),
+                );
+                flash("PDF downloaded.");
+              } catch (err) {
+                console.error(err);
+                flash((err as Error).message || "Couldn't make the PDF.");
+              }
+            }}
+            onBackup={() => {
               captureCurrent();
               downloadBoard(boardRef.current, filesRef.current);
             }}
-          >
-            Export
-          </button>
-          {supabase && (
+          />
+          {supabase && canShare && (
             <button className="btn btn-primary" onClick={share} disabled={sharing}>
               {shared ? "Copy link" : "Share"}
             </button>
@@ -1130,6 +1150,57 @@ export function BoardEditor({ initialBoard, initialFiles, initialPdf, onExit, ba
         <FrameTemplateDialog onPick={addFrame} onClose={() => setPickingFrame(false)} />
       )}
       {shared && !name && <NameDialog onDone={setName} />}
+    </div>
+  );
+}
+
+/** Export: a PDF of every frame, or a backup file of the whole board. */
+function ExportMenu({ onPdf, onBackup }: { onPdf: () => Promise<void>; onBackup: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button className="btn" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={() => setOpen((o) => !o)}>
+        {busy ? "Exporting..." : "Export ▾"}
+      </button>
+      {open && (
+        <div className="menu" role="menu">
+          <button
+            role="menuitem"
+            onClick={async () => {
+              setOpen(false);
+              setBusy(true);
+              await onPdf();
+              setBusy(false);
+            }}
+          >
+            <strong>PDF</strong>
+            <span>Every frame as a page, to share or print</span>
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onBackup();
+            }}
+          >
+            <strong>Backup file (.json)</strong>
+            <span>A complete copy you can bring back later with "Open a file"</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { go, linkTo } from "../route";
 import { newShareId } from "../sync/ids";
 import {
   adminList,
+  copyBoardFiles,
   deleteBoardEverywhere,
   deleteFolder,
   moveBoard,
@@ -18,7 +19,7 @@ import {
   type BoardRow,
   type FolderRow,
 } from "../sync/owner";
-import { uploadBoard } from "../sync/remote";
+import { fetchBoard, setThumbnail, uploadBoard } from "../sync/remote";
 import { framesForBoard } from "../templates/boardTemplates";
 
 import { Brand } from "./Brand";
@@ -206,6 +207,39 @@ export function Home({ email }: { email: string }) {
       console.error(err);
       flash("Couldn't move the board.");
       void refresh();
+    }
+  };
+
+  /** Copy a board (frames, notes, images) into a new board in the same folder. */
+  const duplicate = async (b: BoardRow) => {
+    flash(`Duplicating "${b.title}"...`);
+    try {
+      const src = await fetchBoard(b.id);
+      if (!src) throw new Error("The board wasn't found.");
+      const id = newShareId();
+      const copyOf: Board = {
+        id,
+        title: `${src.title} (copy)`,
+        updated: Date.now(),
+        frames: src.frames.map((f) => ({ ...f, thumbnail: undefined, elements: f.elements.filter((e) => !e.isDeleted) })),
+      };
+      await uploadBoard(copyOf, {}, b.folder_id);
+      const fileIds = [
+        ...new Set(
+          copyOf.frames.flatMap((f) => f.elements.flatMap((e) => (e.type === "image" && e.fileId ? [e.fileId] : []))),
+        ),
+      ];
+      const failed = await copyBoardFiles(b.id, id, fileIds);
+      if (b.thumbnail) await setThumbnail(id, b.thumbnail);
+      await refresh();
+      flash(
+        failed.length
+          ? `Duplicated, but ${failed.length} image${failed.length === 1 ? "" : "s"} didn't copy.`
+          : `Duplicated "${b.title}".`,
+      );
+    } catch (err) {
+      console.error(err);
+      flash("Couldn't duplicate the board.");
     }
   };
 
@@ -456,6 +490,14 @@ export function Home({ email }: { email: string }) {
                     }}
                   >
                     🔗
+                  </button>
+                  <button
+                    className="icon-btn"
+                    title="Duplicate board"
+                    aria-label={`Duplicate ${b.title}`}
+                    onClick={() => void duplicate(b)}
+                  >
+                    ⧉
                   </button>
                   <select
                     className="move-select"

@@ -8,7 +8,7 @@ import { Home } from "./components/Home";
 import { SignIn } from "./components/SignIn";
 import { takePendingPdf } from "./owner/pending";
 import { useOwner, type OwnerState } from "./owner/useOwner";
-import { go, parseRoute, type Route } from "./route";
+import { go, hideBoardAddress, parseRoute, type Route } from "./route";
 import { supabase } from "./sync/client";
 import { fetchBoard } from "./sync/remote";
 import { framesForBoard } from "./templates/boardTemplates";
@@ -87,6 +87,13 @@ function BoardRoute({ id, folder, owner }: { id: string; folder?: string; owner:
     };
   }, [id]);
 
+  // Participants (anyone but the owner) don't get the board's link in their
+  // address bar.
+  const isOwner = owner.status === "owner";
+  useEffect(() => {
+    if (loaded && owner.status !== "loading" && !isOwner) hideBoardAddress(id, folder);
+  }, [loaded, owner.status, isOwner, id, folder]);
+
   if (problem) return <div className="loading">{problem}</div>;
   if (!loaded) return <div className="loading">Opening board...</div>;
 
@@ -105,6 +112,7 @@ function BoardRoute({ id, folder, owner }: { id: string; folder?: string; owner:
       initialPdf={loaded.pdf}
       backLabel={back?.label}
       onExit={back?.go}
+      canShare={isOwner}
     />
   );
 }
