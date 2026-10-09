@@ -1,9 +1,10 @@
-# Brainstorm Board (next)
+# Brainstorm Board
 
-Prototype of the next Brainstorm Board: Jamboard-style fixed frames with
-[Excalidraw](https://github.com/excalidraw/excalidraw) (MIT) as the drawing
-engine inside each frame. The current single-file version lives in
-`../brainstorm-board/` and is unchanged.
+Jamboard-style brainstorming boards with live sharing. Each board is a set of
+fixed frames, with [Excalidraw](https://github.com/excalidraw/excalidraw) (MIT)
+as the drawing engine inside each frame.
+
+Live app: https://gasocialimpact.github.io/brainstorm-board/
 
 ## How it works
 
@@ -69,6 +70,14 @@ npm run dev
 `npm run build` writes a static site to `dist/`. Fonts are copied from the
 Excalidraw package into `public/fonts` so they load from this site rather than
 a CDN.
+
+## Deploy
+
+The `Deploy` workflow builds the app and publishes `dist/` to GitHub Pages on
+pushes to `main` that change the app (edits to Markdown, `supabase/` or
+`libraries/` alone don't deploy). It reads the Supabase settings from the
+repository's Actions variables `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+Boards live in Supabase, so creating or editing boards never needs a deploy.
 
 ## Notes
 
