@@ -23,6 +23,7 @@ import { fetchBoard, setThumbnail, uploadBoard } from "../sync/remote";
 import { framesForBoard } from "../templates/boardTemplates";
 
 import { Brand } from "./Brand";
+import { SlidesHelpDialog, UPLOAD_ACCEPT, isPdf, isSlides } from "./SlidesHelp";
 import { BoardTemplateGrid } from "./TemplatePicker";
 
 /** Which boards the right-hand panel shows */
@@ -257,6 +258,7 @@ export function Home({ email }: { email: string }) {
 
   // Lets the owner sign in without waiting on emails (Supabase rate-limits them).
   const [choosingPassword, setChoosingPassword] = useState(false);
+  const [slidesFile, setSlidesFile] = useState<string | null>(null);
 
   const panelTitle = view === "all" ? "All boards" : view === "unfiled" ? "Unfiled" : (folder?.name ?? "");
 
@@ -378,7 +380,7 @@ export function Home({ email }: { email: string }) {
           <h2>Start from a template</h2>
           <div className="landing-actions">
             <button className="btn" onClick={() => pdfInput.current?.click()}>
-              Start from a PDF
+              Start from a PDF / slides
             </button>
             <button className="btn" onClick={() => importInput.current?.click()}>
               Open a file
@@ -389,12 +391,15 @@ export function Home({ email }: { email: string }) {
         <input
           ref={pdfInput}
           type="file"
-          accept="application/pdf"
+          accept={UPLOAD_ACCEPT}
           hidden
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
-            if (file) void fromPdf(file);
+            if (!file) return;
+            if (isSlides(file)) setSlidesFile(file.name);
+            else if (isPdf(file)) void fromPdf(file);
+            else flash("That file type isn't supported. Choose a PDF.");
           }}
         />
         <input
@@ -526,6 +531,13 @@ export function Home({ email }: { email: string }) {
           </ul>
         )}
       </aside>
+      {slidesFile && (
+        <SlidesHelpDialog
+          fileName={slidesFile}
+          onChoosePdf={() => pdfInput.current?.click()}
+          onClose={() => setSlidesFile(null)}
+        />
+      )}
       {choosingPassword && (
         <PasswordDialog
           onClose={() => setChoosingPassword(false)}

@@ -57,6 +57,7 @@ import { Brand } from "./Brand";
 import { FrameRail } from "./FrameRail";
 import { NameDialog, getSavedName } from "./NameDialog";
 import { CLUSTER_MIME, SidePanel, type AlignKind } from "./SidePanel";
+import { SlidesHelpDialog, UPLOAD_ACCEPT, isPdf, isSlides } from "./SlidesHelp";
 import { FrameTemplateDialog } from "./TemplatePicker";
 
 type Props = {
@@ -749,7 +750,27 @@ export function BoardEditor({
     addToFrame(buildCluster(kind, x, fh), []);
   };
 
+  // A slide deck chosen or dropped: explain how to bring it in as a PDF.
+  const [slidesFile, setSlidesFile] = useState<string | null>(null);
+
+  /** Upload button or drop: PDFs import, slide decks get the PDF guide. */
+  const handleUpload = (file: File) => {
+    if (isSlides(file)) setSlidesFile(file.name);
+    else if (isPdf(file)) void importPdf(file);
+    else flash("That file type isn't supported. Upload a PDF, or an image with Add image.");
+  };
+
   const onDropCapture = (e: React.DragEvent) => {
+    // Files dropped on the board: PDFs import as frames, slide decks get the
+    // guide. Images are left to Excalidraw, which places them where dropped.
+    const dropped = Array.from(e.dataTransfer.files ?? []);
+    const doc = dropped.find((f) => isPdf(f) || isSlides(f));
+    if (doc) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleUpload(doc);
+      return;
+    }
     const label = e.dataTransfer.getData(CLUSTER_MIME);
     const kind = CLUSTERS.find((k) => k.label === label);
     if (!kind || !api) return;
@@ -1043,7 +1064,7 @@ export function BoardEditor({
             Add image
           </button>
           <button className="btn" onClick={() => pdfInput.current?.click()}>
-            Upload PDF
+            Upload PDF / slides
           </button>
           <button className="btn" onClick={clearFrame}>
             Clear frame
@@ -1075,11 +1096,11 @@ export function BoardEditor({
         <input
           ref={pdfInput}
           type="file"
-          accept="application/pdf"
+          accept={UPLOAD_ACCEPT}
           hidden
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) void importPdf(file);
+            if (file) handleUpload(file);
             e.target.value = "";
           }}
         />
@@ -1150,6 +1171,13 @@ export function BoardEditor({
         <FrameTemplateDialog onPick={addFrame} onClose={() => setPickingFrame(false)} />
       )}
       {shared && !name && <NameDialog onDone={setName} />}
+      {slidesFile && (
+        <SlidesHelpDialog
+          fileName={slidesFile}
+          onChoosePdf={() => pdfInput.current?.click()}
+          onClose={() => setSlidesFile(null)}
+        />
+      )}
     </div>
   );
 }
