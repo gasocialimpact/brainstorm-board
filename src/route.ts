@@ -28,8 +28,11 @@ export function routeHash(r: Route) {
 
 const base = () => window.location.origin + window.location.pathname;
 
-/** A link to share: the app address plus the route */
-export const linkTo = (r: Route) => base() + routeHash(r);
+/** The published address, used for links people share (see .env) */
+const publicBase = () => (import.meta.env.VITE_PUBLIC_URL as string | undefined) || base();
+
+/** A link to share: the published app address plus the route */
+export const linkTo = (r: Route) => publicBase() + routeHash(r);
 
 export function go(r: Route) {
   const h = routeHash(r);
